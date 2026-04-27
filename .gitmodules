@@ -7,3 +7,6 @@
 [submodule ".agents/skills/max-patgen"]
 	path = .agents/skills/max-patgen
 	url = git@github.com:2bbb/max-patgen.git
+[submodule "deps/bbb-noise"]
+	path = deps/bbb-noise
+	url = git@github.com:2bbb/bbb-noise.git
