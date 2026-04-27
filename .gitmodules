@@ -10,3 +10,6 @@
 [submodule "deps/bbb-noise"]
 	path = deps/bbb-noise
 	url = git@github.com:2bbb/bbb-noise.git
+[submodule "deps/min-api"]
+	path = deps/min-api
+	url = https://github.com/Cycling74/min-api.git
