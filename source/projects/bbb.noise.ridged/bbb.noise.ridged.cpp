@@ -1,10 +1,10 @@
 #include "c74_min.h"
 #include <bbb/noise.hpp>
 
-class bbb_noise_perlin : public c74::min::object<bbb_noise_perlin> {
+class bbb_noise_ridged : public c74::min::object<bbb_noise_ridged> {
 public:
-	MIN_DESCRIPTION{"Perlin noise generator"};
-	MIN_TAGS{"noise, perlin, procedural"};
+	MIN_DESCRIPTION{"Ridged multifractal noise generator"};
+	MIN_TAGS{"noise, ridged, fractal, procedural"};
 	MIN_AUTHOR{"2bit"};
 
 	c74::min::inlet<> inlet1{this, "(float/list/bang) x coordinate or bang"};
@@ -35,11 +35,57 @@ public:
 	};
 
 	c74::min::attribute<double> scale{this, "scale", 1.0,
-		c74::min::description{"Coordinate scale (scalar or list)"}
+		c74::min::description{"Coordinate scale"}
 	};
 
 	c74::min::attribute<double> offset{this, "offset", 0.0,
-		c74::min::description{"Coordinate offset (scalar or list)"}
+		c74::min::description{"Coordinate offset"}
+	};
+
+	c74::min::attribute<c74::min::symbol> source_attr{this, "source", "simplex",
+		c74::min::description{"Basis noise type: perlin, simplex, value"},
+		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
+			c74::min::symbol src = static_cast<c74::min::symbol>(args[0]);
+			bbb::noise::config cfg = eval_.get_config();
+			if(src == "perlin") { cfg.source = bbb::noise::type::perlin; }
+			else if(src == "simplex") { cfg.source = bbb::noise::type::simplex; }
+			else if(src == "value") { cfg.source = bbb::noise::type::value; }
+			eval_.configure(cfg);
+			return args;
+		}}
+	};
+
+	c74::min::attribute<int> octaves_attr{this, "octaves", 4,
+		c74::min::description{"Number of fractal octaves (1-8)"},
+		c74::min::range{1, 8},
+		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
+			bbb::noise::config cfg = eval_.get_config();
+			cfg.octaves = static_cast<int>(args[0]);
+			eval_.configure(cfg);
+			return args;
+		}}
+	};
+
+	c74::min::attribute<double> gain_attr{this, "gain", 0.5,
+		c74::min::description{"Fractal gain (persistence)"},
+		c74::min::range{0.0, 1.0},
+		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
+			bbb::noise::config cfg = eval_.get_config();
+			cfg.gain = static_cast<double>(args[0]);
+			eval_.configure(cfg);
+			return args;
+		}}
+	};
+
+	c74::min::attribute<double> lacunarity_attr{this, "lacunarity", 2.0,
+		c74::min::description{"Fractal lacunarity (frequency multiplier)"},
+		c74::min::range{0.01, 10.0},
+		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
+			bbb::noise::config cfg = eval_.get_config();
+			cfg.lacunarity = static_cast<double>(args[0]);
+			eval_.configure(cfg);
+			return args;
+		}}
 	};
 
 	c74::min::message<> float_msg{this, "float", "Set x and output",
@@ -125,7 +171,10 @@ public:
 
 private:
 	double x_{0.0}, y_{0.0}, z_{0.0}, w_{0.0};
-	bbb::noise::evaluator eval_{bbb::noise::config{bbb::noise::type::perlin, 0}};
+	bbb::noise::evaluator eval_{
+		bbb::noise::config{bbb::noise::type::simplex, 0, bbb::noise::cellular_mode::f1,
+		                   bbb::noise::fractal_type::ridged, bbb::noise::type::simplex, 4, 0.5, 2.0}
+	};
 
 	void output_noise() {
 		double s = scale;
@@ -140,15 +189,9 @@ private:
 			case 4: raw = eval_.eval(x_ * s + o, y_ * s + o, z_ * s + o, w_ * s + o); break;
 		}
 
-		double result;
-		if(signed_out) {
-			result = raw; // already in [-1, 1] range approximately
-		} else {
-			result = (raw + 1.0) * 0.5;
-		}
-
+		double result = signed_out ? raw : (raw + 1.0) * 0.5;
 		output.send(result);
 	}
 };
 
-MIN_EXTERNAL(bbb_noise_perlin);
+MIN_EXTERNAL(bbb_noise_ridged);

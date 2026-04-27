@@ -1,10 +1,10 @@
 #include "c74_min.h"
 #include <bbb/noise.hpp>
 
-class bbb_noise_perlin : public c74::min::object<bbb_noise_perlin> {
+class bbb_noise_cellular : public c74::min::object<bbb_noise_cellular> {
 public:
-	MIN_DESCRIPTION{"Perlin noise generator"};
-	MIN_TAGS{"noise, perlin, procedural"};
+	MIN_DESCRIPTION{"Cellular (Worley) noise generator"};
+	MIN_TAGS{"noise, cellular, worley, procedural"};
 	MIN_AUTHOR{"2bit"};
 
 	c74::min::inlet<> inlet1{this, "(float/list/bang) x coordinate or bang"};
@@ -35,11 +35,25 @@ public:
 	};
 
 	c74::min::attribute<double> scale{this, "scale", 1.0,
-		c74::min::description{"Coordinate scale (scalar or list)"}
+		c74::min::description{"Coordinate scale"}
 	};
 
 	c74::min::attribute<double> offset{this, "offset", 0.0,
-		c74::min::description{"Coordinate offset (scalar or list)"}
+		c74::min::description{"Coordinate offset"}
+	};
+
+	c74::min::attribute<c74::min::symbol> cell_mode_attr{this, "cellular_mode", "f1",
+		c74::min::description{"Cellular distance mode: f1, f2, f2minusf1, id"},
+		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
+			c74::min::symbol mode_sym = static_cast<c74::min::symbol>(args[0]);
+			bbb::noise::config cfg = eval_.get_config();
+			if(mode_sym == "f1") { cfg.cell_mode = bbb::noise::cellular_mode::f1; }
+			else if(mode_sym == "f2") { cfg.cell_mode = bbb::noise::cellular_mode::f2; }
+			else if(mode_sym == "f2minusf1") { cfg.cell_mode = bbb::noise::cellular_mode::f2_minus_f1; }
+			else if(mode_sym == "id") { cfg.cell_mode = bbb::noise::cellular_mode::id; }
+			eval_.configure(cfg);
+			return args;
+		}}
 	};
 
 	c74::min::message<> float_msg{this, "float", "Set x and output",
@@ -125,7 +139,7 @@ public:
 
 private:
 	double x_{0.0}, y_{0.0}, z_{0.0}, w_{0.0};
-	bbb::noise::evaluator eval_{bbb::noise::config{bbb::noise::type::perlin, 0}};
+	bbb::noise::evaluator eval_{bbb::noise::config{bbb::noise::type::cellular, 0}};
 
 	void output_noise() {
 		double s = scale;
@@ -142,7 +156,7 @@ private:
 
 		double result;
 		if(signed_out) {
-			result = raw; // already in [-1, 1] range approximately
+			result = raw;
 		} else {
 			result = (raw + 1.0) * 0.5;
 		}
@@ -151,4 +165,4 @@ private:
 	}
 };
 
-MIN_EXTERNAL(bbb_noise_perlin);
+MIN_EXTERNAL(bbb_noise_cellular);
