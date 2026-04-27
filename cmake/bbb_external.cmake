@@ -69,6 +69,19 @@ macro(bbb_add_external)
     # --- min-api pre-target ---
     include(${C74_MIN_API_DIR}/script/min-pretarget.cmake)
 
+    # --- workaround: write linker flags to response file ---
+    # max-linker-flags.txt is ~72KB which can exceed ARG_MAX on macOS.
+    # Write CMAKE_MODULE_LINKER_FLAGS to a response file and reference it.
+    if(APPLE AND DEFINED CMAKE_MODULE_LINKER_FLAGS)
+        string(LENGTH "${CMAKE_MODULE_LINKER_FLAGS}" _flag_len)
+        if(_flag_len GREATER 10000)
+            set(_bbb_rsp_file "${CMAKE_BINARY_DIR}/${PROJECT_NAME}_linker_flags.rsp")
+            file(WRITE "${_bbb_rsp_file}" "${CMAKE_MODULE_LINKER_FLAGS}")
+            set(CMAKE_MODULE_LINKER_FLAGS "@${_bbb_rsp_file}")
+        endif()
+        unset(_flag_len)
+    endif()
+
     # --- propagate directory-level variables to parent scope ---
     # min-pretarget -> max-pretarget sets CMAKE_*_LINKER_FLAGS and
     # CMAKE_*_OUTPUT_DIRECTORY.  These are directory-scope variables
