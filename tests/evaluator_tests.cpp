@@ -1,4 +1,8 @@
 #include <bbb/noise.hpp>
+#include "vector_evaluator.hpp"
+
+#include <atomic>
+#include <thread>
 
 #include <cmath>
 #include <cstdint>
@@ -188,6 +192,35 @@ void test_all_snapshots_are_finite() {
     }
 }
 
+void test_concurrent_configuration() {
+    using namespace bbb::noise;
+    vector_evaluator state(config{type::perlin, 0});
+    std::atomic<bool> writer_started{false}, reader_sampled{false};
+    state.update([](config& next) { next.seed = 42; });
+    std::thread writer([&] {
+        for (int seed = 1; seed <= 500; ++seed) {
+            state.update([&](config& next) {
+                if (seed == 1) {
+                    writer_started = true;
+                    while (!reader_sampled.load()) std::this_thread::yield();
+                }
+                next.seed = seed;
+            });
+        }
+    });
+    while (!writer_started.load()) std::this_thread::yield();
+    expect_true(state.begin_vector().get_config().seed == 0, "busy writer preserves previous vector");
+    reader_sampled = true;
+    for (int i = 0; i < 1000; ++i) {
+        const auto& block = state.begin_vector();
+        evaluator reference(block.get_config());
+        expect_near(block.eval(0.125, -1.5), reference.eval(0.125, -1.5), 0,
+                    "published seed reproduces vector samples");
+    }
+    writer.join();
+    expect_true(state.begin_vector().get_config().seed == 500, "last configuration becomes active");
+}
+
 } // namespace
 
 int main() {
@@ -195,6 +228,7 @@ int main() {
     test_fractal_snapshots();
     test_cellular_modes();
     test_seed_determinism();
+    test_concurrent_configuration();
     test_all_snapshots_are_finite();
 
     if(failure_count != 0) {

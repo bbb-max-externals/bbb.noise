@@ -116,9 +116,7 @@ public:
 
 	c74::min::message<> randomize_msg{this, "randomize", "Randomize seed",
 		MIN_FUNCTION {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = static_cast<int>(std::rand());
-			eval_.configure(cfg);
+			seed_attr = std::rand();
 			return {};
 		}
 	};

@@ -1,7 +1,9 @@
 #include "c74_min.h"
-#include <bbb/noise.hpp>
+#include "vector_evaluator.hpp"
 
 class bbb_noise_tilde : public c74::min::object<bbb_noise_tilde>, public c74::min::mc_operator<> {
+	bbb::noise::vector_evaluator eval_{bbb::noise::config{bbb::noise::type::perlin, 0}};
+
 public:
 	MIN_DESCRIPTION{"All-in-one procedural noise signal generator"};
 	MIN_TAGS{"noise, procedural, audio"};
@@ -26,9 +28,9 @@ public:
 	c74::min::attribute<int> seed_attr{this, "seed", 0,
 		c74::min::description{"Random seed"},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = static_cast<int>(args[0]);
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				cfg.seed = static_cast<int>(args[0]);
+			});
 			return args;
 		}}
 	};
@@ -53,11 +55,11 @@ public:
 		c74::min::description{"Basis noise type for fractal"},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
 			c74::min::symbol src = static_cast<c74::min::symbol>(args[0]);
-			bbb::noise::config cfg = eval_.get_config();
-			if(src == "perlin") { cfg.source = bbb::noise::type::perlin; }
-			else if(src == "simplex") { cfg.source = bbb::noise::type::simplex; }
-			else if(src == "value") { cfg.source = bbb::noise::type::value; }
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				if(src == "perlin") { cfg.source = bbb::noise::type::perlin; }
+				else if(src == "simplex") { cfg.source = bbb::noise::type::simplex; }
+				else if(src == "value") { cfg.source = bbb::noise::type::value; }
+			});
 			return args;
 		}}
 	};
@@ -66,12 +68,12 @@ public:
 		c74::min::description{"Cellular distance mode"},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
 			c74::min::symbol mode_sym = static_cast<c74::min::symbol>(args[0]);
-			bbb::noise::config cfg = eval_.get_config();
-			if(mode_sym == "f1") { cfg.cell_mode = bbb::noise::cellular_mode::f1; }
-			else if(mode_sym == "f2") { cfg.cell_mode = bbb::noise::cellular_mode::f2; }
-			else if(mode_sym == "f2minusf1") { cfg.cell_mode = bbb::noise::cellular_mode::f2_minus_f1; }
-			else if(mode_sym == "id") { cfg.cell_mode = bbb::noise::cellular_mode::id; }
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				if(mode_sym == "f1") { cfg.cell_mode = bbb::noise::cellular_mode::f1; }
+				else if(mode_sym == "f2") { cfg.cell_mode = bbb::noise::cellular_mode::f2; }
+				else if(mode_sym == "f2minusf1") { cfg.cell_mode = bbb::noise::cellular_mode::f2_minus_f1; }
+				else if(mode_sym == "id") { cfg.cell_mode = bbb::noise::cellular_mode::id; }
+			});
 			return args;
 		}}
 	};
@@ -80,9 +82,9 @@ public:
 		c74::min::description{"Number of octaves (1-8)"},
 		c74::min::range{1, 8},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.octaves = static_cast<int>(args[0]);
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				cfg.octaves = static_cast<int>(args[0]);
+			});
 			return args;
 		}}
 	};
@@ -91,9 +93,9 @@ public:
 		c74::min::description{"Fractal gain"},
 		c74::min::range{0.0, 1.0},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.gain = static_cast<double>(args[0]);
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				cfg.gain = static_cast<double>(args[0]);
+			});
 			return args;
 		}}
 	};
@@ -102,14 +104,15 @@ public:
 		c74::min::description{"Fractal lacunarity"},
 		c74::min::range{0.01, 10.0},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.lacunarity = static_cast<double>(args[0]);
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				cfg.lacunarity = static_cast<double>(args[0]);
+			});
 			return args;
 		}}
 	};
 
 	void operator()(c74::min::audio_bundle input, c74::min::audio_bundle output) {
+		const auto& evaluator = eval_.begin_vector();
 		auto& in = input;
 		auto& out = output;
 		double s = scale;
@@ -127,10 +130,10 @@ public:
 
 			double raw = 0.0;
 			switch(dim) {
-				case 1: raw = eval_.eval(x * s + o); break;
-				case 2: raw = eval_.eval(x * s + o, y * s + o); break;
-				case 3: raw = eval_.eval(x * s + o, y * s + o, z * s + o); break;
-				case 4: raw = eval_.eval(x * s + o, y * s + o, z * s + o, w * s + o); break;
+				case 1: raw = evaluator.eval(x * s + o); break;
+				case 2: raw = evaluator.eval(x * s + o, y * s + o); break;
+				case 3: raw = evaluator.eval(x * s + o, y * s + o, z * s + o); break;
+				case 4: raw = evaluator.eval(x * s + o, y * s + o, z * s + o, w * s + o); break;
 			}
 
 			double result = signed_out ? raw : (raw + 1.0) * 0.5;
@@ -142,38 +145,34 @@ public:
 
 	c74::min::message<> randomize_msg{this, "randomize", "Randomize seed",
 		MIN_FUNCTION {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = static_cast<int>(std::rand());
-			eval_.configure(cfg);
+			seed_attr = std::rand();
 			return {};
 		}
 	};
 
 private:
-	bbb::noise::evaluator eval_{bbb::noise::config{bbb::noise::type::perlin, 0}};
-
 	void reconfigure(c74::min::symbol basis) {
-		bbb::noise::config cfg = eval_.get_config();
-		if(basis == "perlin") {
-			cfg.noise_type = bbb::noise::type::perlin;
-			cfg.fractal = bbb::noise::fractal_type::none;
-		} else if(basis == "simplex") {
-			cfg.noise_type = bbb::noise::type::simplex;
-			cfg.fractal = bbb::noise::fractal_type::none;
-		} else if(basis == "value") {
-			cfg.noise_type = bbb::noise::type::value;
-			cfg.fractal = bbb::noise::fractal_type::none;
-		} else if(basis == "cellular") {
-			cfg.noise_type = bbb::noise::type::cellular;
-			cfg.fractal = bbb::noise::fractal_type::none;
-		} else if(basis == "fbm") {
-			cfg.fractal = bbb::noise::fractal_type::fbm;
-		} else if(basis == "turbulence") {
-			cfg.fractal = bbb::noise::fractal_type::turbulence;
-		} else if(basis == "ridged") {
-			cfg.fractal = bbb::noise::fractal_type::ridged;
-		}
-		eval_.configure(cfg);
+		eval_.update([&](bbb::noise::config& cfg) {
+			if(basis == "perlin") {
+				cfg.noise_type = bbb::noise::type::perlin;
+				cfg.fractal = bbb::noise::fractal_type::none;
+			} else if(basis == "simplex") {
+				cfg.noise_type = bbb::noise::type::simplex;
+				cfg.fractal = bbb::noise::fractal_type::none;
+			} else if(basis == "value") {
+				cfg.noise_type = bbb::noise::type::value;
+				cfg.fractal = bbb::noise::fractal_type::none;
+			} else if(basis == "cellular") {
+				cfg.noise_type = bbb::noise::type::cellular;
+				cfg.fractal = bbb::noise::fractal_type::none;
+			} else if(basis == "fbm") {
+				cfg.fractal = bbb::noise::fractal_type::fbm;
+			} else if(basis == "turbulence") {
+				cfg.fractal = bbb::noise::fractal_type::turbulence;
+			} else if(basis == "ridged") {
+				cfg.fractal = bbb::noise::fractal_type::ridged;
+			}
+		});
 	}
 };
 
