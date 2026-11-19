@@ -1,7 +1,9 @@
 #include "c74_min.h"
-#include <bbb/noise.hpp>
+#include "vector_evaluator.hpp"
 
 class bbb_noise_cellular_tilde : public c74::min::object<bbb_noise_cellular_tilde>, public c74::min::mc_operator<> {
+	bbb::noise::vector_evaluator eval_{bbb::noise::config{bbb::noise::type::cellular, 0}};
+
 public:
 	MIN_DESCRIPTION{"Cellular (Worley) noise signal generator"};
 	MIN_TAGS{"noise, cellular, worley, procedural, audio"};
@@ -26,9 +28,9 @@ public:
 	c74::min::attribute<int> seed_attr{this, "seed", 0,
 		c74::min::description{"Random seed"},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = static_cast<int>(args[0]);
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				cfg.seed = static_cast<int>(args[0]);
+			});
 			return args;
 		}}
 	};
@@ -45,17 +47,18 @@ public:
 		c74::min::description{"Cellular distance mode: f1, f2, f2minusf1, id"},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
 			c74::min::symbol mode_sym = static_cast<c74::min::symbol>(args[0]);
-			bbb::noise::config cfg = eval_.get_config();
-			if(mode_sym == "f1") { cfg.cell_mode = bbb::noise::cellular_mode::f1; }
-			else if(mode_sym == "f2") { cfg.cell_mode = bbb::noise::cellular_mode::f2; }
-			else if(mode_sym == "f2minusf1") { cfg.cell_mode = bbb::noise::cellular_mode::f2_minus_f1; }
-			else if(mode_sym == "id") { cfg.cell_mode = bbb::noise::cellular_mode::id; }
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				if(mode_sym == "f1") { cfg.cell_mode = bbb::noise::cellular_mode::f1; }
+				else if(mode_sym == "f2") { cfg.cell_mode = bbb::noise::cellular_mode::f2; }
+				else if(mode_sym == "f2minusf1") { cfg.cell_mode = bbb::noise::cellular_mode::f2_minus_f1; }
+				else if(mode_sym == "id") { cfg.cell_mode = bbb::noise::cellular_mode::id; }
+			});
 			return args;
 		}}
 	};
 
 	void operator()(c74::min::audio_bundle input, c74::min::audio_bundle output) {
+		const auto& evaluator = eval_.begin_vector();
 		auto& in = input;
 		auto& out = output;
 		double s = scale;
@@ -73,10 +76,10 @@ public:
 
 			double raw = 0.0;
 			switch(dim) {
-				case 1: raw = eval_.eval(x * s + o); break;
-				case 2: raw = eval_.eval(x * s + o, y * s + o); break;
-				case 3: raw = eval_.eval(x * s + o, y * s + o, z * s + o); break;
-				case 4: raw = eval_.eval(x * s + o, y * s + o, z * s + o, w * s + o); break;
+				case 1: raw = evaluator.eval(x * s + o); break;
+				case 2: raw = evaluator.eval(x * s + o, y * s + o); break;
+				case 3: raw = evaluator.eval(x * s + o, y * s + o, z * s + o); break;
+				case 4: raw = evaluator.eval(x * s + o, y * s + o, z * s + o, w * s + o); break;
 			}
 
 			double result = signed_out ? raw : (raw + 1.0) * 0.5;
@@ -88,15 +91,11 @@ public:
 
 	c74::min::message<> randomize_msg{this, "randomize", "Randomize seed",
 		MIN_FUNCTION {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = static_cast<int>(std::rand());
-			eval_.configure(cfg);
+			seed_attr = std::rand();
 			return {};
 		}
 	};
 
-private:
-	bbb::noise::evaluator eval_{bbb::noise::config{bbb::noise::type::cellular, 0}};
 };
 
 MIN_EXTERNAL(bbb_noise_cellular_tilde);

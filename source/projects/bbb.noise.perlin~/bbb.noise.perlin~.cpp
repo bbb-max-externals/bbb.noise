@@ -1,7 +1,9 @@
 #include "c74_min.h"
-#include <bbb/noise.hpp>
+#include "vector_evaluator.hpp"
 
 class bbb_noise_perlin_tilde : public c74::min::object<bbb_noise_perlin_tilde>, public c74::min::mc_operator<> {
+	bbb::noise::vector_evaluator eval_{bbb::noise::config{bbb::noise::type::perlin, 0}};
+
 public:
 	MIN_DESCRIPTION{"Perlin noise signal generator"};
 	MIN_TAGS{"noise, perlin, procedural, audio"};
@@ -27,9 +29,9 @@ public:
 		c74::min::description{"Random seed (deterministic when fixed)"},
 		c74::min::setter{[this](const c74::min::atoms &args, int) -> c74::min::atoms {
 			int new_seed = static_cast<int>(args[0]);
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = new_seed;
-			eval_.configure(cfg);
+			eval_.update([&](bbb::noise::config& cfg) {
+				cfg.seed = new_seed;
+			});
 			return args;
 		}}
 	};
@@ -43,6 +45,7 @@ public:
 	};
 
 	void operator()(c74::min::audio_bundle input, c74::min::audio_bundle output) {
+		const auto& evaluator = eval_.begin_vector();
 		auto& in = input;
 		auto& out = output;
 		double s = scale;
@@ -67,10 +70,10 @@ public:
 
 			double raw = 0.0;
 			switch(dim) {
-				case 1: raw = eval_.eval(sx); break;
-				case 2: raw = eval_.eval(sx, sy); break;
-				case 3: raw = eval_.eval(sx, sy, sz); break;
-				case 4: raw = eval_.eval(sx, sy, sz, sw); break;
+				case 1: raw = evaluator.eval(sx); break;
+				case 2: raw = evaluator.eval(sx, sy); break;
+				case 3: raw = evaluator.eval(sx, sy, sz); break;
+				case 4: raw = evaluator.eval(sx, sy, sz, sw); break;
 			}
 
 			double result = signed_out ? raw : (raw + 1.0) * 0.5;
@@ -91,15 +94,11 @@ public:
 
 	c74::min::message<> randomize_msg{this, "randomize", "Randomize seed",
 		MIN_FUNCTION {
-			bbb::noise::config cfg = eval_.get_config();
-			cfg.seed = static_cast<int>(std::rand());
-			eval_.configure(cfg);
+			seed_attr = std::rand();
 			return {};
 		}
 	};
 
-private:
-	bbb::noise::evaluator eval_{bbb::noise::config{bbb::noise::type::perlin, 0}};
 };
 
 MIN_EXTERNAL(bbb_noise_perlin_tilde);
